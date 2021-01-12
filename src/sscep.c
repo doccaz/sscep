@@ -4,11 +4,108 @@
  * See the file COPYRIGHT for licensing information.
  */
 
-
 /* Main routine */
 
-
 #include "sscep.h"
+
+char *pname;
+int timeout;
+
+/* configuration options, defined in cmd.h */
+int c_flag;
+char *c_char;
+int C_flag;
+char *C_char;
+int d_flag;
+int e_flag;
+char *e_char;
+char *E_char;
+int E_flag;
+int f_flag;
+char *f_char;
+char *F_char;
+int F_flag;
+char *g_char;
+int g_flag;
+int h_flag;
+int H_flag;
+char *l_char;
+int l_flag;
+char *L_char;
+int L_flag;
+char *i_char;
+int i_flag;
+char *k_char;
+int k_flag;
+char *K_char;
+int K_flag;
+int m_flag;
+char *m_char;
+int M_flag;
+char *M_char;
+int n_flag;
+int n_num;
+char *O_char;
+int O_flag;
+char *p_char;
+int p_flag;
+char *r_char;
+int r_flag;
+int R_flag;
+char *s_char;
+int s_flag;
+char *S_char;
+int S_flag;
+int t_num;
+int t_flag;
+int T_num;
+int T_flag;
+int u_flag;
+char *url_char;
+int v_flag;
+int w_flag;
+char *w_char;
+
+EVP_MD *fp_alg;
+EVP_MD *sig_alg;
+EVP_CIPHER *enc_alg;
+
+static SCEP_CAP scep_caps[SCEP_CAPS] = {
+	{ .cap = SCEP_CAP_AES,      .str = "AES" },
+	{ .cap = SCEP_CAP_3DES,     .str = "DES3" },
+	{ .cap = SCEP_CAP_NEXT_CA,  .str = "GetNextCACert" },
+	{ .cap = SCEP_CAP_POST_PKI, .str = "POSTPKIOperation" },
+	{ .cap = SCEP_CAP_RENEWAL,  .str = "Renewal" },
+	{ .cap = SCEP_CAP_SHA_1,    .str = "SHA-1" },
+	{ .cap = SCEP_CAP_SHA_224,  .str = "SHA-224" },
+	{ .cap = SCEP_CAP_SHA_256,  .str = "SHA-256" },
+	{ .cap = SCEP_CAP_SHA_384,  .str = "SHA-384" },
+	{ .cap = SCEP_CAP_SHA_512,  .str = "SHA-512" },
+	{ .cap = SCEP_CAP_STA,      .str = "SCEPStandard" },
+};
+
+#define SUP_CAP_AES(cap) \
+	((cap & SCEP_CAP_AES) || (cap & SCEP_CAP_STA))
+#define SUP_CAP_3DES(cap) \
+	(cap & SCEP_CAP_3DES)
+#define SUP_CAP_NEXT_CA(cap) \
+	(cap & SCEP_CAP_NEXT_CA)
+#define SUP_CAP_POST_PKI(cap) \
+	((cap & SCEP_CAP_POST_PKI) || (cap & SCEP_CAP_STA))
+#define SUP_CAP_RENEWAL(cap) \
+	(cap & SCEP_CAP_RENEWAL)
+#define SUP_CAP_SHA_1(cap) \
+	(cap & SCEP_CAP_SHA_1)
+#define SUP_CAP_SHA_224(cap) \
+	(cap & SCEP_CAP_SHA_224)
+#define SUP_CAP_SHA_256(cap) \
+	((cap & SCEP_CAP_SHA_256) || (cap & SCEP_CAP_STA))
+#define SUP_CAP_SHA_384(cap) \
+	(cap & SCEP_CAP_SHA_384)
+#define SUP_CAP_SHA_512(cap) \
+	(cap & SCEP_CAP_SHA_512)
+#define SUP_CAP_STA(cap) \
+	(cap & SCEP_CAP_STA)
 
 static char *
 handle_serial (char * serial)
@@ -65,9 +162,9 @@ handle_serial (char * serial)
 int
 main(int argc, char **argv) {
 	//ENGINE *e = NULL;
-	int			c, host_port = 80, count = 1;
+	int operation_flag;
+	int			c, host_port = 80, count = 1, cnt = 0;
 	char			*host_name, *p, *dir_name = NULL;
-	char			http_string[16384];
 	struct http_reply	reply;
 	unsigned int		n;
 	unsigned char		md[EVP_MAX_MD_SIZE];
@@ -77,9 +174,9 @@ main(int argc, char **argv) {
 	STACK_OF(X509)		*nextcara = NULL;
 	X509 				*cert=NULL;
 	int i;
-	int required_option_space;
-	
-
+	size_t required_option_space;
+	int ca_caps = 0;
+	int pkistatus = 0;
 
 #ifdef WIN32
 	WORD wVersionRequested;
@@ -129,6 +226,8 @@ main(int argc, char **argv) {
 		usage();
 	} else if (!strncmp(argv[1], "getca", 5)) {
 		operation_flag = SCEP_OPERATION_GETCA;
+		if (!strncmp(argv[1], "getcaps", 7))
+			operation_flag = SCEP_OPERATION_GETCAPS;
 	} else if (!strncmp(argv[1], "enroll", 6)) {
 		operation_flag = SCEP_OPERATION_ENROLL;
 	} else if (!strncmp(argv[1], "getcert", 7)) {
@@ -289,23 +388,11 @@ main(int argc, char **argv) {
 		v_flag = 1;
 	
 	if(f_char){
-		scep_conf_init(f_char);
+		scep_conf_init(f_char, operation_flag);
 	}else{
 		scep_conf = NULL;    //moved init to here otherwise compile error on windows
 	}
-	/* Read in the configuration file: */
-	/*if (f_char) {
-	#ifdef WIN32
-		if ((fopen_s(&fp, f_char, "r")))
-	#else
-		if (!(fp = fopen(f_char, "r")))
-	#endif
-			fprintf(stderr, "%s: cannot open %s\n", pname, f_char);
-		else {
-			init_config(fp);
-			(void)fclose(fp);
-		}
-	}*/
+
 	if (v_flag)
 		fprintf(stdout, "%s: starting sscep, version %s\n",
 			pname, VERSION);
@@ -316,17 +403,17 @@ main(int argc, char **argv) {
 	*/
 	if (v_flag)
 		fprintf(stdout, "%s: new transaction\n", pname);
-	new_transaction(&scep_t);
+	new_transaction(&scep_t, operation_flag);
 
 	/*enable Engine Support */
 	if (g_flag) {
-		scep_t.e = scep_engine_init(scep_t.e);
+		scep_t.e = scep_engine_init();
 	}
 	
 	/*
 	 * Check argument logic.
 	 */
-	if (!c_flag) {
+	if (!c_flag && operation_flag != SCEP_OPERATION_GETCAPS) {
 		if (operation_flag == SCEP_OPERATION_GETCA) {
 			fprintf(stderr,
 			  "%s: missing CA certificate filename (-c)\n", pname);
@@ -425,41 +512,44 @@ main(int argc, char **argv) {
 		#endif
 		dir_name = url_char;
 	}
-
-	/* Break down the URL */
-	if (!u_flag) {
-		fprintf(stderr, "%s: missing URL (-u)\n", pname);
-		exit (SCEP_PKISTATUS_ERROR);
-	}
-	if (strncmp(url_char, "http://", 7) && !p_flag) {
-		fprintf(stderr, "%s: illegal URL %s\n", pname, url_char);
-		exit (SCEP_PKISTATUS_ERROR);
-	}
-	if (p_flag) {
-		#ifdef WIN32
-		host_name = _strdup(p_char);
-		#else
-		host_name = strdup(p_char);
-		#endif
-		dir_name = url_char;
-	}
 	#ifdef WIN32
 	else if (!(host_name = _strdup(url_char + 7)))
 	#else
 	else if (!(host_name = strdup(url_char + 7)))
 	#endif
 		error_memory();
+
 	p = host_name;
 	c = 0;
+	cnt =0;
 	while (*p != '\0') {
 		if (*p == '/' && !p_flag && !c) {
 			*p = '\0';
 			if (*(p+1)) dir_name = p + 1;
 			c = 1;
 		}
-		if (*p == ':') {
-			*p = '\0';
-			if (*(p+1)) host_port = atoi(p+1);
+		if (*p == '[') { //For IPv6 starts from here
+			dir_name =  (p+1);
+			host_name = dir_name;
+			while (*p != '\0') {
+				if (*p == ']') {
+					*p = '\0';
+					if (*(p+1) == ':') {
+						*(p+1)  = '\0';
+						host_port = atoi(p+2);
+					}
+				}
+				p++;
+			}
+		} else {
+			if (!cnt && !c) {
+				dir_name = p;
+				cnt = 1;
+			}
+			if (*p == ':') {
+				*p = '\0';
+				if (*(p+1)) host_port = atoi(p+1);
+			}
 		}
 		p++;
 	}
@@ -500,6 +590,14 @@ main(int argc, char **argv) {
 		sig_alg = (EVP_MD *)EVP_md5();
 	} else if (!strncmp(S_char, "sha1", 4)) {
 		sig_alg = (EVP_MD *)EVP_sha1();
+	} else if (!strncmp(S_char, "sha224", 6)) {
+		sig_alg = (EVP_MD *)EVP_sha224();
+	} else if (!strncmp(S_char, "sha256", 6)) {
+		sig_alg = (EVP_MD *)EVP_sha256();
+	} else if (!strncmp(S_char, "sha384", 6)) {
+		sig_alg = (EVP_MD *)EVP_sha384();
+	} else if (!strncmp(S_char, "sha512", 6)) {
+		sig_alg = (EVP_MD *)EVP_sha512();
 	} else {
 		fprintf(stderr, "%s: unsupported algorithm: %s\n",
 			pname, S_char);
@@ -512,10 +610,75 @@ main(int argc, char **argv) {
 		fp_alg = (EVP_MD *)EVP_md5();
 	} else if (!strncmp(F_char, "sha1", 4)) {
 		fp_alg = (EVP_MD *)EVP_sha1();
+	} else if (!strncmp(F_char, "sha224", 6)) {
+		fp_alg = (EVP_MD *)EVP_sha224();
+	} else if (!strncmp(F_char, "sha256", 6)) {
+		fp_alg = (EVP_MD *)EVP_sha256();
+	} else if (!strncmp(F_char, "sha384", 6)) {
+		fp_alg = (EVP_MD *)EVP_sha384();
+	} else if (!strncmp(F_char, "sha512", 6)) {
+		fp_alg = (EVP_MD *)EVP_sha512();
 	} else {
 		fprintf(stderr, "%s: unsupported algorithm: %s\n",
 			pname, F_char);
 		exit (SCEP_PKISTATUS_ERROR);
+	}
+
+	if (v_flag)
+		fprintf(stdout, "%s: SCEP_OPERATION_GETCAPS\n",
+			pname);
+
+	/* Get server capabilities */
+	reply.payload = NULL;
+	if ((c = send_msg(&reply, 0, "GetCACaps", SCEP_OPERATION_GETCAPS, NULL, NULL, 0,
+				p_flag, host_name, host_port, dir_name)) == 1) {
+		fprintf(stderr, "%s: error while sending "
+				"message\n", pname);
+		exit (SCEP_PKISTATUS_NET);
+	}
+
+	if (reply.status == 200 && reply.payload != NULL) {
+		for ( i = 0 ; i < reply.bytes ; ) {
+			int _ca_caps = 0;
+			int j = i, k;
+
+			while (j < reply.bytes && !
+					(reply.payload[j] == '\r' ||
+					 reply.payload[j] == '\n'))
+				++j;
+
+			while (j < reply.bytes &&
+					(reply.payload[j] == '\r' ||
+					 reply.payload[j] == '\n'))
+			{
+				reply.payload[j] = '\0';
+				++j;
+			}
+
+			/* parse capabilities */
+			for ( k = 0 ; k < SCEP_CAPS ; ++k ) {
+				if (reply.payload[i] != scep_caps[k].str[0])
+					continue;
+
+				if (strcmp(&reply.payload[i], scep_caps[k].str) != 0)
+					continue;
+
+				_ca_caps |= scep_caps[k].cap;
+			}
+
+			if (_ca_caps == 0)
+				fprintf(stderr, "%s: unknown "
+						"capability %s\n",
+						pname, &reply.payload[i]);
+			else
+				ca_caps |= _ca_caps;
+
+			i = ( j == i ? j + 1 : j );
+		}
+
+		if (d_flag)
+			fprintf(stdout, "%s: scep caps bitmask: 0x%04x\n",
+					pname, ca_caps);
 	}
 
 	/*
@@ -531,37 +694,14 @@ main(int argc, char **argv) {
 			if (!i_flag)
 				i_char = CA_IDENTIFIER;
 
-			/* Forge the HTTP message */
-
-			if(!M_flag){
-				snprintf(http_string, sizeof(http_string),
-				 "GET %s%s?operation=GetCACert&message=%s "
-				 "HTTP/1.0\r\n\r\n", p_flag ? "" : "/", dir_name,
-						i_char);
-
-			}else{
-				snprintf(http_string, sizeof(http_string),
-					"GET %s%s?operation=GetCACert&message=%s&%s "
-					"HTTP/1.0\r\n\r\n", p_flag ? "" : "/", dir_name,
-						i_char, M_char);
-
-			}
-
-
-
-			if (d_flag){
-				printf("%s: requesting CA certificate\n", pname);
-				fprintf(stdout, "%s: scep msg: %s", pname,
-									http_string);
-			}
-
 			/*
 			 * Send http message.
 			 * Response is written to http_response struct "reply".
 			 */
 			reply.payload = NULL;
-			if ((c = send_msg (&reply, http_string, host_name,
-					host_port, operation_flag)) == 1) {
+			if ((c = send_msg(&reply, 0, "GetCACert", operation_flag,
+					M_char, i_char, strlen(i_char),
+					p_flag, host_name, host_port, dir_name)) == 1) {
 				fprintf(stderr, "%s: error while sending "
 					"message\n", pname);
 				exit (SCEP_PKISTATUS_NET);
@@ -630,35 +770,14 @@ main(int argc, char **argv) {
 				if (!i_flag)
 					i_char = CA_IDENTIFIER;
 
-				/* Forge the HTTP message */
-				if(!M_flag){
-					snprintf(http_string, sizeof(http_string),
-					 "GET %s%s?operation=GetNextCACert&message=%s "
-					 "HTTP/1.0\r\n\r\n", p_flag ? "" : "/", dir_name,
-							i_char);
-
-				}else{
-					snprintf(http_string, sizeof(http_string),
-						"GET %s%s?operation=GetNextCACert&message=%s&%s "
-						"HTTP/1.0\r\n\r\n", p_flag ? "" : "/", dir_name,
-							i_char, M_char);
-
-				}
-
-
-				if (d_flag){
-					printf("%s: requesting nextCA certificate\n", pname);
-					fprintf(stdout, "%s: scep msg: %s", pname,
-						http_string);
-				}
-
 				/*
 				 * Send http message.
 				 * Response is written to http_response struct "reply".
 				 */
 				reply.payload = NULL;
-				if ((c = send_msg (&reply, http_string, host_name,
-						host_port, operation_flag)) == 1) {
+				if ((c = send_msg(&reply, 0, "GetNextCACert", operation_flag,
+						M_char, i_char, strlen(i_char),
+						p_flag, host_name, host_port, dir_name)) == 1) {
 					if(v_flag){
 					fprintf(stderr, "%s: error while sending "
 						"message\n", pname);
@@ -770,7 +889,7 @@ main(int argc, char **argv) {
 			  exit (SCEP_PKISTATUS_FILE);
 			}
 			
-			if(scep_conf != NULL) {
+			if(g_flag) {
 				sscep_engine_read_key_new(&rsa, k_char, scep_t.e);
 			} else {
 				read_key(&rsa, k_char);
@@ -784,7 +903,7 @@ main(int argc, char **argv) {
 
 			if (K_flag) {
 				//TODO auf hwcrhk prfen?
-				if(scep_conf != NULL) {
+				if(g_flag) {
 					sscep_engine_read_key_old(&renewal_key, K_char, scep_t.e);
 				} else {
 					read_key(&renewal_key, K_char);
@@ -871,7 +990,7 @@ not_enroll:
 			}
 			/* User supplied serial number */
 			if (s_flag) {
-				BIGNUM *bn;
+				BIGNUM *bn = NULL;
 				ASN1_INTEGER *ai;
 				int len = BN_dec2bn(&bn , s_char);
 				if (!len || !(ai = BN_to_ASN1_INTEGER(bn, NULL))) {
@@ -882,6 +1001,21 @@ not_enroll:
 				 scep_t.ias_getcert->serial = ai;
 			}
 		break;
+
+		case SCEP_OPERATION_GETCAPS:
+			if (v_flag)
+				fprintf(stdout, "%s: SCEP_OPERATION_GETCAPS\n",
+					pname);
+
+			fprintf(stdout, "%s: scep capabilities: ", pname);
+			for ( i = 0 ; i < SCEP_CAPS ; ++i )
+				if (ca_caps & scep_caps[i].cap)
+					fprintf(stdout, "%s%s",
+							count++ > 1 ? ", " : "",
+							scep_caps[i].str);
+			fprintf(stdout, "\n");
+			scep_t.pki_status = pkistatus = SCEP_PKISTATUS_SUCCESS;
+			break;
 	}
 
 	switch(operation_flag) {
@@ -921,16 +1055,13 @@ not_enroll:
 			scep_t.request_type = SCEP_REQUEST_GETCRL;
 			printf("%s: requesting crl\n",pname);
 			break;
-		}
+	}
 
 		/* Enter polling loop */
 		while (scep_t.pki_status != SCEP_PKISTATUS_SUCCESS) {
-			/* create payload */
-			pkcs7_wrap(&scep_t);
 
-			/* URL-encode */
-			p = url_encode((char *)scep_t.request_payload,
-				scep_t.request_len);
+			/* create payload */
+			pkcs7_wrap(&scep_t, !SUP_CAP_POST_PKI(ca_caps));
 
 			/*Test mode print SCEP request and don't send it*/
 			if(m_flag){
@@ -954,33 +1085,11 @@ not_enroll:
 				return 0;
 			}
 
-			/* Forge the HTTP message */
-		/*	snprintf(http_string, sizeof(http_string),
-				"GET %s%s?operation="
-				"PKIOperation&message="
-				"%s HTTP/1.0\r\n\r\n",
-				p_flag ? "" : "/", dir_name, p);*/
-
-			if(!M_flag){
-				snprintf(http_string, sizeof(http_string),
-				 "GET %s%s?operation=PKIOperation&message=%s "
-				 "HTTP/1.0\r\n\r\n", p_flag ? "" : "/", dir_name, p);
-
-			}else{
-				snprintf(http_string, sizeof(http_string),
-					"GET %s%s?operation=PKIOperation&message=%s&%s "
-					"HTTP/1.0\r\n\r\n", p_flag ? "" : "/", dir_name,p, M_char);
-
-			}
-
-			if (d_flag)
-				fprintf(stdout, "%s: scep msg: %s",
-					pname, http_string);
-
 			/* send http */
 			reply.payload = NULL;
-			if ((c = send_msg (&reply, http_string, host_name,
-					host_port, operation_flag)) == 1) {
+			if ((c = send_msg(&reply, SUP_CAP_POST_PKI(ca_caps), "PKIOperation", operation_flag,
+						M_char, scep_t.request_payload, scep_t.request_len,
+						p_flag, host_name, host_port, dir_name)) == 1) {
 				fprintf(stderr, "%s: error while sending "
 					"message\n", pname);
 				exit (SCEP_PKISTATUS_NET);
@@ -1096,11 +1205,12 @@ usage() {
 	"  enroll            Enroll certificate\n"
 	"  getcert           Query certificate\n"
 	"  getcrl            Query CRL\n"
+	"  getcaps           Query SCEP capabilities\n"
 	"\nGeneral OPTIONS\n"
 	"  -u <url>          SCEP server URL\n"
 	"  -p <host:port>    Use proxy server at host:port\n"
-	"  -M <string>		 Monitor Information String name=value&name=value ...\n"
-	"  -g                Enable Engine support\n"
+	"  -M <string>       Monitor Information String name=value&name=value ...\n"
+	"  -g <engine>       Use the given cryptographic engine\n"
 	"  -h				 Keyforme=ID. \n"//TODO
 	"  -f <file>         Use configuration file\n"
 	"  -c <file>         CA certificate file (write if OPERATION is getca or getnextca)\n"
@@ -1117,25 +1227,25 @@ usage() {
 	"  -c <file>         CA certificate file (write if OPERATION is getca or getnextca)\n"
 	"  -w <file>         Write signer certificate in file (optional) \n"
 	"\nOPTIONS for OPERATION enroll are\n"
- 	"  -k <file>         Private key file\n"
+	"  -k <file>         Private key file\n"
 	"  -r <file>         Certificate request file\n"
- 	"  -K <file>         Signature private key file, use with -O\n"
- 	"  -O <file>         Signature certificate (used instead of self-signed)\n"
+	"  -K <file>         Signature private key file, use with -O\n"
+	"  -O <file>         Signature certificate (used instead of self-signed)\n"
 	"  -l <file>         Write enrolled certificate in file\n"
 	"  -e <file>         Use different CA cert for encryption\n"
 	"  -L <file>         Write selfsigned certificate in file\n"
 	"  -t <secs>         Polling interval in seconds\n"
 	"  -T <secs>         Max polling time in seconds\n"
 	"  -n <count>        Max number of GetCertInitial requests\n"
- 	"  -R                Resume interrupted enrollment\n"
+	"  -R                Resume interrupted enrollment\n"
 	"\nOPTIONS for OPERATION getcert are\n"
- 	"  -k <file>         Private key file\n"
-	"  -l <file>         Local certificate file\n"
+	"  -k <file>         Signature private key file\n"
+	"  -l <file>         Signature local certificate file\n"
 	"  -s <number>       Certificate serial number\n"
 	"  -w <file>         Write certificate in file\n"
 	"\nOPTIONS for OPERATION getcrl are\n"
- 	"  -k <file>         Private key file\n"
-	"  -l <file>         Local certificate file\n"
+	"  -k <file>         Signature private key file\n"
+	"  -l <file>         Signature local certificate file\n"
 	"  -w <file>         Write CRL in file\n\n", pname);
 	exit(0);
 }

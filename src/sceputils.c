@@ -9,10 +9,19 @@
 #include "sscep.h"
 #include "ias.h"
 
+/* OpenSSL OID handles */
+int nid_messageType;
+int nid_pkiStatus;
+int nid_failInfo;
+int nid_senderNonce;
+int nid_recipientNonce;
+int nid_transId;
+int nid_extensionReq;
+
 /*
  * Initialize a SCEP transaction
  */
-int new_transaction(struct scep *s) {
+int new_transaction(struct scep *s, int operation_flag) {
 
 	/* Set the whole struct as 0 */
 	memset(s, 0, sizeof(*s));
@@ -259,7 +268,7 @@ key_fingerprint(X509_REQ *req) {
  */
 void read_serial(ASN1_INTEGER** target, unsigned char ** source, int source_len) {
     const int buffer_len = source_len + 2;
-    const unsigned char * buffer = malloc(sizeof(unsigned char[buffer_len]));
+    const unsigned char * buffer = malloc(sizeof(unsigned char)*buffer_len);
 
     snprintf((char *) buffer, buffer_len, "%c%c%s", 2, source_len, *source);
 

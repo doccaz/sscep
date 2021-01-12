@@ -5,6 +5,14 @@
 #define itoa _itoa
 #endif
 
+SCEP_CONF *scep_conf;
+
+int scep_conf_load_operation_getca(CONF *conf);
+int scep_conf_load_operation_enroll(CONF *conf);
+int scep_conf_load_operation_getcert(CONF *conf);
+int scep_conf_load_operation_getcrl(CONF *conf);
+int scep_conf_load_operation_getnextca(CONF *conf);
+
 NAME_VALUE_PAIR* NAME_VALUE_PAIR_new(char *name, char *value) {
 	NAME_VALUE_PAIR *ret = OPENSSL_malloc(sizeof(NAME_VALUE_PAIR));
 	ret->name = OPENSSL_strdup(name);
@@ -18,9 +26,10 @@ void NAME_VALUE_PAIR_free(NAME_VALUE_PAIR *nvp) {
 	OPENSSL_free(nvp);
 }
 
-int scep_conf_init(char *filename) {
+int scep_conf_init(char *filename, int operation_flag) {
 	long err;
 	CONF *conf;
+	char *engine_section, *var, *engine_special_section;
 
 	if(filename == NULL) {
 		return 0;
@@ -39,20 +48,7 @@ int scep_conf_init(char *filename) {
 	scep_conf = malloc(sizeof(*scep_conf));
 	scep_conf->engine = malloc(sizeof(struct scep_engine_conf_st));
 	scep_conf->engine_str = NULL;
-	if(scep_conf_load(conf) == 0 && v_flag) {
-		//report something here?
-	}
-	return 0;
-}
-
-
-int scep_conf_load(CONF *conf) {
-
-	char *engine_section, *var, *engine_special_section;
-
-#ifdef WIN32
-	char *windir;
-#endif
+	memset(scep_conf->engine, 0, sizeof(struct scep_engine_conf_st));
 
 	//load global scep vars
 	if((var = NCONF_get_string(conf, SCEP_CONFIGURATION_SECTION, SCEP_CONFIGURATION_PARAM_CACERTFILE)) && !c_flag) {

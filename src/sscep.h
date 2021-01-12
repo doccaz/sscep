@@ -24,7 +24,8 @@
 
 #ifdef WIN32
 
-#include <winsock.h>
+#define NOCRYPT
+#include <winsock2.h>
 #include <io.h>
 
 #ifdef _DEBUG
@@ -65,23 +66,24 @@
 #include <openssl/ssl.h>
 /* Global defines */
 
-#define	VERSION	"0.7"
+#define	VERSION	"0.8.1"
 
 /* SCEP operations */
-int operation_flag;
 #define	SCEP_OPERATION_GETCA	1
 #define	SCEP_OPERATION_ENROLL	3
 #define	SCEP_OPERATION_GETCERT	5
 #define	SCEP_OPERATION_GETCRL	7
 #define SCEP_OPERATION_GETNEXTCA 15
+#define SCEP_OPERATION_GETCAPS  31
 
 /* SCEP MIME headers */
 #define MIME_GETCA	"application/x-x509-ca-cert"
 #define MIME_GETCA_RA	"application/x-x509-ca-ra-cert"
 #define MIME_GETNEXTCA "application/x-x509-next-ca-cert"
+#define MIME_GETCAPS	"text/plain"
 
 /* Entrust VPN connector uses different MIME types */
-#define MIME_PKI	"x-pki-message"
+#define MIME_PKI	"application/x-pki-message"
 #define MIME_GETCA_RA_ENTRUST	"application/x-x509-ra-ca-certs"
 
 /* SCEP reply types based on MIME headers */
@@ -89,6 +91,7 @@ int operation_flag;
 #define	SCEP_MIME_GETCA_RA	3
 #define	SCEP_MIME_PKI		5
 #define	SCEP_MIME_GETNEXTCA	7
+#define	SCEP_MIME_GETCAPS	15
 
 /* SCEP request types */
 #define	SCEP_REQUEST_NONE		0
@@ -145,48 +148,55 @@ int operation_flag;
 //define encoding for capi engine support
 #define MY_ENCODING_TYPE  (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING)
 
+/* SCEP capabilities */
+#define SCEP_CAP_AES      0x001
+#define SCEP_CAP_3DES     0x002
+#define SCEP_CAP_NEXT_CA  0x004
+#define SCEP_CAP_POST_PKI 0x008
+#define SCEP_CAP_RENEWAL  0x010
+#define SCEP_CAP_SHA_1    0x020
+#define SCEP_CAP_SHA_224  0x040
+#define SCEP_CAP_SHA_256  0x080
+#define SCEP_CAP_SHA_384  0x100
+#define SCEP_CAP_SHA_512  0x200
+#define SCEP_CAP_STA      0x400
+
+#define SCEP_CAPS 11
+
 /* End of Global defines */
 
 
 /* Global variables */
 
 /* Program name */
-char *pname;
+extern char *pname;
 
 /* Network timeout */
-int timeout;
+extern int timeout;
 
 /* Certificates, requests, keys.. */
-X509 *cacert;
-X509 *encert;
-X509 *localcert;
-X509 *othercert;
-X509 *renewal_cert;
-X509_REQ *request;
-EVP_PKEY *rsa;
-EVP_PKEY *renewal_key;
-X509_CRL *crl;
-FILE *cafile;
-FILE *reqfile;
-FILE *otherfile;
-FILE *crlfile;
+extern X509 *cacert;
+extern X509 *encert;
+extern X509 *localcert;
+extern X509 *renewal_cert;
+extern X509_REQ *request;
+extern EVP_PKEY *rsa;
+extern EVP_PKEY *renewal_key;
+extern X509_CRL *crl;
 
 /* Fingerprint, signing and encryption algorithms */
-EVP_MD *fp_alg;
-EVP_MD *sig_alg;
-EVP_CIPHER *enc_alg;
+extern EVP_MD *fp_alg;
+extern EVP_MD *sig_alg;
+extern EVP_CIPHER *enc_alg;
 
-/* OpenSSL OID handles */
-int nid_messageType;
-int nid_pkiStatus;
-int nid_failInfo;
-int nid_senderNonce;
-int nid_recipientNonce;
-int nid_transId;
-int nid_extensionReq;
-
-/* Global pkistatus */
-int pkistatus;
+/* OpenSSL OID handles, defined in sceputils.c */
+extern int nid_messageType;
+extern int nid_pkiStatus;
+extern int nid_failInfo;
+extern int nid_senderNonce;
+extern int nid_recipientNonce;
+extern int nid_transId;
+extern int nid_extensionReq;
 
 /* End of Global variables */
 
@@ -262,6 +272,12 @@ struct scep {
 	ENGINE *e;
 
 };
+
+typedef struct {
+	int cap;
+	const char * str;
+} SCEP_CAP;
+
 /* End of structures */
 
 
@@ -271,7 +287,10 @@ struct scep {
 void usage(void);
 
 /* Send HTTP message */
-int send_msg (struct http_reply *, char *, char *, int, int);
+int
+send_msg(struct http_reply *http, int do_post, char *scep_operation,
+		int operation, char *M_char, char *payload, size_t payload_len,
+		int p_flag, char *host_name, int host_port, char *dir_name);
 
 /* Catch SIGALRM */
 void catchalarm (int);
@@ -322,7 +341,7 @@ void write_other_cert(struct scep *);
 int write_ca_ra(struct http_reply *);
 
 /* Create new SCEP session */
-int new_transaction(struct scep *);
+int new_transaction(struct scep *, int operation_flag);
 
 /* Create self-signed certificate */
 int new_selfsigned(struct scep *);
@@ -331,7 +350,7 @@ int new_selfsigned(struct scep *);
 char * key_fingerprint(X509_REQ *);
 
 /* PKCS#7 encode message */
-int pkcs7_wrap(struct scep *);
+int pkcs7_wrap(struct scep *, int enc_base64);
 
 /* PKCS#7 decode message */
 int pkcs7_unwrap(struct scep *);
@@ -348,9 +367,6 @@ int get_attribute(STACK_OF(X509_ATTRIBUTE) *, int, ASN1_TYPE **);
 
 /*PKCS#7 decode message without SCEP attribute verification*/
 int pkcs7_verify_unwrap(struct scep *s, char * cachainfile );
-
-/* URL-endcode */
-char *url_encode (char *, size_t);
 
 /* End of Functions */
 #endif

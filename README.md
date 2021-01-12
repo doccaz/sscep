@@ -37,12 +37,17 @@ or by using the query messages defined in SCEP.
 
 ## SSCEP FEATURES
 
-Currently, SSCEP implements all of the SCEP operations using SCEP query
-messages. There's no LDAP support, and probably there will never be
-(that's why it is simple).
+Currently, SSCEP implements:
+* All of the SCEP operations using SCEP query messages
+* HTTP/1.1 queries via IPv4 or IPv6
+* Integration with OpenSSL cryptographic engines
+
+There's no LDAP support, and probably there will never be (that's why it is
+simple).
 
 SSCEP has been tested successfully against the following CA products:
 
+* [OpenXPKI](https://www.openxpki.org/) (getcaps, getca and enroll works)
 * OpenSCEP server (getca, enroll and getcrl works)\*
 * Windows2000 server CA + Microsoft SCEP module (works)
 * SSH Certifier (getca and enroll works)
@@ -64,57 +69,80 @@ SSCEP has been tested successfully against the following CA products:
 
 The program should compile on the following systems:
 
+* Linux
 * OpenBSD
 * AIX
 * Darwin (PowerPC, no universal binaries yet)
 * Tandem NonStop (Guardian), OSS environment, MIPS processor
-* Linux x86
 * z/OS (USS environment)
 * Solaris
-* Windows, compiled with VC6, statically linked with OpenSSL 0.9.7i
+* Windows
+
+In general, two build systems are supported:
+
+* GNU Autotools (autoconf, automake, libtool)
+* CMake
 
 ### Unix:
 
 To compile run: 
 `$ make`
 
-### Windows:
-
-The Win32 version of sscep has been tested with OpenSSL-v0.9.7i.
-For Win32 environment you can choose two ways to compile the sscep program.
-
-1. Dynamically linked against the binary OpenSSL distribution: 
-	http://www.slproweb.com/download/Win32OpenSSL-v0.9.7i.exe
-For this you need the binaries from OpenSSL-v0.9.7i and change the paths
-in the makefile Makefile.w32.
-This works with VC6.0 but not with VC7.0.
-
-2. Statically linked against OpenSSL-v0.9.7i.
-You can download the source from the OpenSSL Homepage and you have to change the 
-paths in the makefile Makefile.w32. This OpenSSL Version needs to be compiled with the same
-compiler as sscep, because otherwise you can get some trouble with diffrent LIBs.
-
-If you want to use a debug version of sscep, then you need to compile a debug version
-of OpenSSL.
-
-To compile run:
-
+To generate the configure script when checking out from github source:
 ```cmd
-C:\...> vcvars32.bat
-C:\...> nmake -f Makefile.w32 
+$ ./bootstrap.sh
 ```
 
-Copy binary file sscep and configuration file sscep.conf to somewhere.
+To compile from a tarball created with 'make dist'
+```cmd
+$ ./configure
+$ make
+$ make install
+```
 
-> The program should compile on OpenBSD system without problems. Uncompress
-> the package and run command
+To build a RPM package from the tarball do
+```cmd
+cp sscep-*.tar.gz ~/rpmbuild/SOURCES
+rpmbuild -ba scripts/sscep.spec
+```
 
-`$ make`
+### Windows:
 
-Copy binary file sscep and configuration file sscep.conf to somewhere.
+1. Download and install:
+   * Microsoft Visual Studio (e.g. the Community Edition) from https://visualstudio.microsoft.com/downloads
+   * CMake from https://cmake.org/download
+   * Win32/Win64 OpenSSL from http://slproweb.com/products/Win32OpenSSL.html
+
+2. Start the CMake GUI, select *Where is the source code* and *Where to put the binaries*
+   (it could be the same), then *Configure* and *Generate* the project files.
+
+3. Start the Visual Studio, open the generated Solution (sscep.sln) and build the project.
+   Then copy the sscep binary (Debug or Release) and configuration file sscep.conf somewhere.
 
 
->>>>>>> feat/getnextca
+### macOS:
+
+Install a few packages from Homebrew:
+```cmd
+$ brew install autoconf automake libtool pkg-config openssl
+```
+
+To generate the configure script when checking out from github source:
+```cmd
+$ autoheader
+$ glibtoolize
+$ aclocal
+$ automake -a -c -f
+$ autoreconf
+```
+
+Set PKG_CONFIG_PATH and then the usual will work:
+```cmd
+$ export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
+$ ./Configure
+$ make
+$ make install
+```
 
 ## HOW TO USE
 
@@ -133,10 +161,12 @@ Available OPERATIONs are
   enroll            Enroll certificate
   getcert           Query certificate
   getcrl            Query CRL
+  getcaps           Query SCEP capabilities
 
 General OPTIONS
   -u <url>          SCEP server URL
   -p <host:port>    Use proxy server at host:port
+  -g <engine>       Use the given cryptographic engine
   -f <file>         Use configuration file
   -c <file>         CA certificate file (write if OPERATION is getca)
   -E <name>         PKCS#7 encryption algorithm (des|3des|blowfish)
@@ -151,7 +181,7 @@ OPTIONS for OPERATION getca are
 OPTIONS for OPERATION enroll are
   -k <file>         Private key file
   -r <file>         Certificate request file
-  -K <file>         Signature private key file
+  -K <file>         Signature private key file, use with -O
   -O <file>         Signature certificate (used instead of self-signed)
   -l <file>         Write enrolled certificate in file
   -e <file>         Use different CA cert for encryption
@@ -162,14 +192,14 @@ OPTIONS for OPERATION enroll are
   -R                Resume interrupted enrollment
 
 OPTIONS for OPERATION getcert are
-  -k <file>         Private key file
-  -l <file>         Local certificate file
+  -k <file>         Signature private key file
+  -l <file>         Signature local certificate file
   -s <number>       Certificate serial number (decimal)
   -w <file>         Write certificate in file
 
 OPTIONS for OPERATION getcrl are
-  -k <file>         Private key file
-  -l <file>         Local certificate file
+  -k <file>         Signature private key file
+  -l <file>         Signature local certificate file
   -w <file>         Write CRL in file
 ```
 
